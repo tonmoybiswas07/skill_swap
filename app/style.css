@@ -740,3 +740,51 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.route-loading {
+  display: grid;
+  place-items: center;
+  min-height: 58svh;
+}
+
+.loading-card {
+  display: grid;
+  justify-items: center;
+  gap: .85rem;
+  padding: 1.5rem 2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  font-weight: 650;
+}
+
+.loading-mark {
+  display: grid;
+  place-items: center;
+  width: 3.35rem;
+  aspect-ratio: 1;
+  border: .22rem solid var(--ink);
+  border-radius: 50%;
+  position: relative;
+  background: var(--ink);
+  color: var(--lime);
+  font: 1.5rem/1 system-ui, sans-serif;
+}
+
+.loading-mark::after {
+  content: "";
+  position: absolute;
+  inset: -.4rem;
+  border: .18rem solid var(--line);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .loading-mark::after { animation: loader-spin .8s linear infinite; }
+}
+
+@keyframes loader-spin {
+  to { transform: rotate(1turn); }
+}
