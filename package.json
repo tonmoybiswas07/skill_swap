@@ -1,0 +1,27 @@
+{
+  "name": "skillswap-ledger",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "check": "next typegen && tsc --noEmit",
+    "test": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --test tests/*.test.ts",
+    "seed:demo": "node --env-file=.env.local scripts/seed-demo.ts"
+  },
+  "dependencies": {
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "better-auth": "^1.4.0",
+    "mongodb": "^7.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0"
+  },
+  "type": "module"
+}
