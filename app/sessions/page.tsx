@@ -52,6 +52,7 @@ export default async function SessionsPage() {
             <h3>{booking.skill} · {peer}</h3>
             <p>{mentor ? "Teaching" : "Learning"} · <span className="session-status" data-status={status}>{statusLabels[status]}</span></p>
             <LocalTime start={booking.start.toISOString()} end={booking.end.toISOString()} />
+            {accepted && future && <a className="button calendar-link" href={`/api/sessions/${booking._id}/calendar`}>Add to calendar</a>}
             {accepted && booking.end <= now && confirmed && <p>Confirmed. Waiting for the other participant.</p>}
             {(pending || (accepted && (future || (booking.end <= now && !confirmed)))) && <ActionForm action={submit.bind(null, "change")}>
               <input type="hidden" name="booking" value={String(booking._id)} />

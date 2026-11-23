@@ -24,11 +24,11 @@ SkillSwap Ledger is a campus skill exchange built with Next.js App Router, TypeS
 
 | Route | What you can do |
 | --- | --- |
-| `/` | Search by name, campus, or skill, filter by category, and see a mutual match when both skill interests align. |
+| `/` | Search by name, campus, or skill, filter by category, campus, or availability, and see a mutual match when both skill interests align. |
 | `/account` | Sign up, sign in, or sign out with Better Auth. |
 | `/profile` | Edit your campus profile and publish 30-minute teaching slots. |
 | `/mentors/[id]` | View a mentor's skills and request an open session. |
-| `/sessions` | Manage requests, upcoming sessions, and history. |
+| `/sessions` | Manage requests, upcoming sessions, and history. Download upcoming accepted sessions as calendar events (.ics). |
 | `/wallet` | View available and reserved credits and the activity history. |
 
 Each account starts with one credit. A mentor's acceptance reserves one credit and closes competing requests for the slot. When funds are insufficient, the request stays pending. Either participant can cancel before the start, releasing any reservation. After the session ends, both participants must confirm for the reserved credit to transfer. Sessions display in the viewer's local timezone.
