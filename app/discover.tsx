@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { Profile } from "@/lib/profiles";
 
 type Mentor = Profile & {
+  verifiedCampus?: string;
   available: boolean;
   match: { offered: string; wanted: string } | null;
 };
@@ -188,7 +189,8 @@ export default function Discover({
                   <p>{mentor.campus}</p>
                 </div>
               </div>
-              {mentor.bio && <p className="mentor-bio">{mentor.bio}</p>}
+              {mentor.verifiedCampus && <span className="verified-badge">✓ Verified · {mentor.verifiedCampus}</span>}
+          {mentor.bio && <p className="mentor-bio">{mentor.bio}</p>}
               <dl className="mentor-skills">
                 <div>
                   <dt>Teaches</dt>

@@ -1,3 +1,4 @@
+import { verifiedInstitutions } from "@/lib/campus";
 import { collections } from "@/lib/booking";
 import { mutualMatch, profiles } from "@/lib/profiles";
 import { currentUser } from "@/lib/session";
@@ -10,10 +11,11 @@ export default async function DiscoverPage() {
     profiles().find({ _id: { $ne: user?.id ?? "" }, "teaches.0": { $exists: true } }).sort({ name: 1 }).toArray(),
     collections().slots.distinct("mentor", { start: { $gt: new Date() }, booking: { $exists: false } }),
   ]);
+  const verified = await verifiedInstitutions(mentors.map((mentor) => mentor._id));
   const available = new Set(openMentors);
 
   return <Discover needsProfile={!!user && (!viewer || !viewer.teaches.length || !viewer.learns.length)}
     mentors={mentors.map((mentor) => ({
-      ...mentor, available: available.has(mentor._id), match: viewer ? mutualMatch(viewer, mentor) : null,
+      ...mentor, verifiedCampus: verified.get(mentor._id), available: available.has(mentor._id), match: viewer ? mutualMatch(viewer, mentor) : null,
     }))} />;
 }

@@ -26,9 +26,11 @@ SkillSwap Ledger is a campus skill exchange built with Next.js App Router, TypeS
 | --- | --- |
 | `/` | Search by name, campus, or skill, filter by category, campus, or availability, and see a mutual match when both skill interests align. |
 | `/account` | Sign up, sign in, or sign out with Better Auth. |
-| `/profile` | Edit your campus profile and publish 30-minute teaching slots. |
+| `/profile` | Edit and verify your campus profile. Publish up to eight weekly 30-minute slots at once or remove unbooked slots. |
 | `/mentors/[id]` | View a mentor's skills and request an open session. |
-| `/sessions` | Manage requests, upcoming sessions, and history. Download upcoming accepted sessions as calendar events (.ics). |
+| `/sessions` | Manage requests, upcoming sessions, and history. Download upcoming accepted sessions as calendar events (.ics), report issues, and leave feedback after completion. |
+| `/inbox` | Read booking updates and see sessions starting in the next 24 hours. |
+| `/moderation` | Review and resolve reports if your account is configured as a moderator. |
 | `/wallet` | View available and reserved credits and the activity history. |
 
 Each account starts with one credit. A mentor's acceptance reserves one credit and closes competing requests for the slot. When funds are insufficient, the request stays pending. Either participant can cancel before the start, releasing any reservation. After the session ends, both participants must confirm for the reserved credit to transfer. Sessions display in the viewer's local timezone.
@@ -45,6 +47,13 @@ Build and run the app on a Node.js 24 host that supports Next.js server routes a
 | `MONGODB_DATABASE` | The production database name. Set it explicitly and use database credentials scoped to this database with collection and index permissions. |
 
 Set these values in the host's server-side environment or secret manager. Keep credentials and local env files out of Git. Use a separate database and auth origin for previews where you test sign-in. Seed only an isolated demo environment with `MONGODB_DATABASE=skillswap_demo`. Supply `DEMO_PASSWORD` privately to the seed command and share it only with the people testing the demo.
+
+## Optional services
+
+- **Disputes.** Set `DISPUTE_MODERATOR_IDS` to a comma-separated list of trusted Better Auth user IDs. These are the string forms of the users' MongoDB `user._id` values. An accepted session can be reported after it ends when an independent moderator is configured. The moderator reviews the reason and either releases the reservation back to the learner or transfers the credit to the mentor. Participants cannot resolve their own reports.
+- **Campus verification.** Set `CAMPUS_EMAIL_DOMAINS` to exact domain-to-name pairs, such as `university.edu=Example University,college.edu=Example College`. Set `RESEND_API_KEY` and `CAMPUS_EMAIL_FROM` to use a [verified Resend sender](https://resend.com/docs/api-reference/emails/send-email). Members request a short-lived code sent to their account email. The verified institution appears publicly. Email addresses and verification codes stay private.
+- **Notifications.** Booking updates and 24-hour reminders appear in the signed-in member's Inbox. The reminders are calculated when the Inbox is opened.
+- **Feedback.** The learner can leave one rating and an optional public comment per completed session. Mentor pages show recent feedback without showing the reviewer's identity.
 
 ## Three-account demo
 

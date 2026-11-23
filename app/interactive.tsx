@@ -10,9 +10,21 @@ export function ActionForm({ action, children, localTime = false }: {
 }) {
   const [state, run, pending] = useActionState(async (previous: Result, data: FormData) => {
     if (localTime) {
-      const date = new Date(String(data.get("start")));
-      if (!Number.isFinite(+date)) return { message: "Choose a date and time.", error: true };
-      data.set("start", date.toISOString());
+      const start = String(data.get("start"));
+      const count = Number(data.get("weeks") ?? 1);
+      const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(start);
+      if (!match || !Number.isInteger(count) || count < 1 || count > 8) {
+        return { message: "Choose a date, time, and one to eight weeks.", error: true };
+      }
+      const [, year, month, day, hour, minute] = match.map(Number);
+      data.delete("starts");
+      for (let week = 0; week < count; week++) {
+        const date = new Date(year, month - 1, day + week * 7, hour, minute);
+        if (!Number.isFinite(+date) || date.getHours() !== hour || date.getMinutes() !== minute) {
+          return { message: "A slot falls in a local clock change. Choose another time.", error: true };
+        }
+        data.append("starts", date.toISOString());
+      }
     }
     return action(previous, data);
   }, { message: "" });

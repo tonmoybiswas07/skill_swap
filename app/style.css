@@ -788,3 +788,21 @@ textarea {
 @keyframes loader-spin {
   to { transform: rotate(1turn); }
 }
+
+.verified-badge {
+  align-self: start;
+  display: inline-block;
+  padding: .2rem .45rem;
+  border-radius: .35rem;
+  background: #e9efc0;
+  color: #345423;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.session details { margin-top: .65rem; }
+.session summary { cursor: pointer; font-weight: 650; }
+.session:target { outline: 2px solid #77347a; outline-offset: .3rem; }
+.session-status[data-status="disputed"] { background: #f8dcd1; }
+.inbox-new { margin-left: .4rem; }
+.moderation-link { margin-bottom: 1rem; }

@@ -8,6 +8,7 @@ const destinations = [
   { href: "/profile", label: "Profile", glyph: "◎" },
   { href: "/sessions", label: "Sessions", glyph: "▦" },
   { href: "/wallet", label: "Wallet", glyph: "▤" },
+  { href: "/inbox", label: "Inbox", glyph: "✉" },
   { href: "/account", label: "Account", glyph: "◉" },
 ];
 

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { getAuth } from "../lib/auth.ts";
-import { changeBooking, collections, ensureWallet, publishSlot, requestSlot } from "../lib/booking.ts";
+import { changeBooking, collections, ensureWallet, publishSlot, publishSlots, removeSlot, requestSlot } from "../lib/booking.ts";
+import { sendCampusCode, verifiedInstitutions, verifyCampusCode } from "../lib/campus.ts";
+import { feedback, leaveFeedback } from "../lib/feedback.ts";
+import { markNotificationsRead, notifications } from "../lib/notifications.ts";
 import { getDatabase } from "../lib/db.ts";
 import { mutualMatch, profiles, saveProfile, type Profile } from "../lib/profiles.ts";
 
@@ -17,7 +20,7 @@ test("a mutual match requires a skill in each direction", () => {
 test("transactions protect slots and credits across the three-account exchange", {
   skip: !process.env.TEST_MONGODB_URI && "Set TEST_MONGODB_URI to a transaction-capable test server",
   timeout: 60_000,
-}, async () => {
+}, async (context) => {
   process.env.MONGODB_URI = process.env.TEST_MONGODB_URI;
   process.env.MONGODB_DATABASE = `skillswap_test_${randomUUID().replaceAll("-", "")}`;
   process.env.BETTER_AUTH_URL = "http://localhost:3000";
@@ -150,6 +153,82 @@ test("transactions protect slots and credits across the three-account exchange",
     await balance(nila, 1, 1);
     await changeBooking(accepted.mentor, String(accepted._id), "cancel");
     await balance(nila, 2, 0);
+
+    const weekly = [500, 500 + 7 * 24 * 60].map((minutes) => new Date(Date.now() + minutes * 60_000));
+    await publishSlots(rafi, weekly.map((date) => date.toISOString()));
+    const fresh = new Date(+weekly[1] + 60 * 60_000);
+    await assert.rejects(publishSlots(rafi, [weekly[0].toISOString(), fresh.toISOString()]), /overlaps/);
+    assert.equal(await slots.countDocuments({ mentor: rafi, start: fresh }), 0);
+    const removable = await slots.findOne({ mentor: rafi, start: weekly[0] });
+    assert.ok(removable);
+    const removedRequest = await requestSlot(anika, String(removable._id), "React");
+    await assert.rejects(removeSlot(anika, String(removable._id)), /unbooked/);
+    await removeSlot(rafi, String(removable._id));
+    assert.equal((await bookings.findOne({ _id: removedRequest }))?.status, "cancelled");
+    assert.equal(await notifications().countDocuments({ recipient: anika, booking: removedRequest, kind: "cancelled" }), 1);
+    assert.equal(await notifications().countDocuments({ recipient: rafi, booking: removedRequest, kind: "request" }), 1);
+    await markNotificationsRead(anika);
+    assert.equal(await notifications().countDocuments({ recipient: anika, readAt: { $exists: false } }), 0);
+
+    process.env.DISPUTE_MODERATOR_IDS = nila;
+    const disputedSlot = await slot(rafi, 310);
+    const disputed = await requestSlot(anika, disputedSlot, "React");
+    await changeBooking(rafi, String(disputed), "accept");
+    await assert.rejects(removeSlot(rafi, disputedSlot), /unbooked/);
+    await assert.rejects(changeBooking(anika, String(disputed), "report", "No-show"), /unavailable/);
+    await bookings.updateOne({ _id: disputed }, { $set: { start: new Date(Date.now() - 31 * 60_000), end: new Date(Date.now() - 60_000) } });
+    await changeBooking(anika, String(disputed), "report", "No-show");
+    assert.equal((await bookings.findOne({ _id: disputed }))?.status, "disputed");
+    await balance(anika, 0, 1);
+    await assert.rejects(changeBooking(rafi, String(disputed), "confirm"), /unavailable/);
+    await assert.rejects(changeBooking(rafi, String(disputed), "refund-dispute"), /moderator/);
+    const refunds = await Promise.allSettled([
+      changeBooking(nila, String(disputed), "refund-dispute"),
+      changeBooking(nila, String(disputed), "refund-dispute"),
+    ]);
+    assert.equal(refunds.filter((result) => result.status === "fulfilled").length, 1);
+    await balance(anika, 1, 0);
+    await activity(anika, "release", 1, -1, disputed);
+    assert.equal((await bookings.findOne({ _id: disputed }))?.dispute?.resolvedBy, nila);
+    assert.equal(await notifications().countDocuments({ booking: disputed, kind: "refunded" }), 2);
+
+    const contested = await requestSlot(anika, await slot(rafi, 350), "React");
+    await changeBooking(rafi, String(contested), "accept");
+    await bookings.updateOne({ _id: contested }, { $set: { start: new Date(Date.now() - 31 * 60_000), end: new Date(Date.now() - 60_000) } });
+    await changeBooking(rafi, String(contested), "report", "Learner confirmed attendance during the call.");
+    await changeBooking(nila, String(contested), "pay-dispute");
+    assert.equal((await bookings.findOne({ _id: contested }))?.status, "completed");
+    await balance(anika, 0, 0);
+    await balance(rafi, 1, 0);
+    await activity(rafi, "transfer", 1, 0, contested);
+
+    await assert.rejects(leaveFeedback(anika, String(disputed), 5, ""), /completed/);
+    await assert.rejects(leaveFeedback(rafi, String(teaching), 5, ""), /learner/);
+    await leaveFeedback(anika, String(teaching), 5, "Helpful examples.");
+    await assert.rejects(leaveFeedback(anika, String(teaching), 4, ""), /already reviewed/);
+    assert.equal((await feedback().findOne({ _id: teaching }))?.comment, "Helpful examples.");
+
+    process.env.CAMPUS_EMAIL_DOMAINS = "example.test=Example University";
+    process.env.RESEND_API_KEY = "mock-key";
+    process.env.CAMPUS_EMAIL_FROM = "sender@example.test";
+    let code = "";
+    context.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
+      assert.equal(url, "https://api.resend.com/emails");
+      const payload = JSON.parse(String(options.body));
+      assert.deepEqual(payload.to, ["rafi@example.test"]);
+      code = String(payload.text).match(/\d{8}/)?.[0] ?? "";
+      return new Response(null, { status: 200 });
+    });
+    await assert.rejects(sendCampusCode(rafi, "rafi@sub.example.test"), /supported/);
+    await sendCampusCode(rafi, "rafi@example.test");
+    assert.match(code, /^\d{8}$/);
+    await assert.rejects(sendCampusCode(rafi, "rafi@example.test"), /last minute/);
+    await assert.rejects(verifyCampusCode(anika, "anika@example.test", code), /expired/);
+    const wrongCode = code === "00000000" ? "00000001" : "00000000";
+    await assert.rejects(verifyCampusCode(rafi, "rafi@example.test", wrongCode), /did not match/);
+    await verifyCampusCode(rafi, "rafi@example.test", code);
+    await assert.rejects(verifyCampusCode(rafi, "rafi@example.test", code), /expired/);
+    assert.deepEqual([...(await verifiedInstitutions([rafi, anika]))], [[rafi, "Example University"]]);
   } finally {
     try { await db.dropDatabase(); } finally { await client.close(); }
   }
