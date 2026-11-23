@@ -3,6 +3,10 @@ import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { getDatabase } from "./db.ts";
 import { ensureWallet } from "./booking.ts";
 
+export function authConfigured() {
+  return Boolean(process.env.MONGODB_URI && process.env.BETTER_AUTH_SECRET && process.env.BETTER_AUTH_URL);
+}
+
 function createAuth() {
   const secret = process.env.BETTER_AUTH_SECRET;
   const baseURL = process.env.BETTER_AUTH_URL;

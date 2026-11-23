@@ -8,8 +8,8 @@ import { ActionForm, LocalTime } from "../../interactive";
 
 export default async function MentorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!process.env.MONGODB_URI) notFound();
-  const [user, mentor] = await Promise.all([currentUser(), profiles().findOne({ _id: id })]);
+  const user = await currentUser();
+  const mentor = await profiles().findOne({ _id: id });
   if (!mentor) notFound();
   const { slots, bookings } = collections();
   const [open, pending] = await Promise.all([

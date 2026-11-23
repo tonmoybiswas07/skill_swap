@@ -33,9 +33,9 @@ export default async function ProfilePage() {
           <button className="primary" disabled={!profile?.teaches.length}>Publish slot</button>
         </ActionForm>
         {!profile?.teaches.length && <p>Add a skill you teach to publish slots.</p>}
-        {slots.length > 0 && <ul>{slots.map((slot) => <li key={String(slot._id)}>
+        {slots.length > 0 ? <ul className="slots">{slots.map((slot) => <li key={String(slot._id)}>
           <LocalTime start={slot.start.toISOString()} end={slot.end.toISOString()} /> · {slot.booking ? "Booked" : "Open"}
-        </li>)}</ul>}
+        </li>)}</ul> : !!profile?.teaches.length && <p>No upcoming slots.</p>}
       </section>
     </div>
   </main>;

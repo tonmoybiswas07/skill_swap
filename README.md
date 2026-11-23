@@ -33,14 +33,27 @@ SkillSwap Ledger is a campus skill exchange built with Next.js App Router, TypeS
 
 Each account starts with one credit. A mentor's acceptance reserves one credit and closes competing requests for the slot. When funds are insufficient, the request stays pending. Either participant can cancel before the start, releasing any reservation. After the session ends, both participants must confirm for the reserved credit to transfer. Sessions display in the viewer's local timezone.
 
+## Production deployment
+
+Build and run the app on a Node.js 24 host that supports Next.js server routes and server actions. Use `npm ci`, `npm run build`, and `npm start` on a Node server, or select the Next.js preset on a managed host.
+
+| Server variable | Production value |
+| --- | --- |
+| `BETTER_AUTH_URL` | The canonical public HTTPS origin users open, including its scheme and with no path. Point users to this domain for sign-in. |
+| `BETTER_AUTH_SECRET` | A deployment-specific secret generated with `openssl rand -base64 32`. Keep it stable across app instances and releases. |
+| `MONGODB_URI` | A private connection string for Atlas or another transaction-capable MongoDB replica set or sharded deployment. Allow the hosting environment to reach the cluster. |
+| `MONGODB_DATABASE` | The production database name. Set it explicitly and use database credentials scoped to this database with collection and index permissions. |
+
+Set these values in the host's server-side environment or secret manager. Keep credentials and local env files out of Git. Use a separate database and auth origin for previews where you test sign-in. Seed only an isolated demo environment with `MONGODB_DATABASE=skillswap_demo`. Supply `DEMO_PASSWORD` privately to the seed command and share it only with the people testing the demo.
+
 ## Three-account demo
 
 1. Set `MONGODB_DATABASE=skillswap_demo` and choose a local `DEMO_PASSWORD` in `.env.local`. Run `npm run seed:demo`, then start or restart the app. The seed creates Rafi (`rafi@example.test`, React), Anika (`anika@example.test`, Python), and Nila (`nila@example.test`, Figma). All three use your local demo password. Rerunning the seed refreshes the demo profiles and adds availability when a member has no future open slot. It preserves balances and booking history.
 2. Sign in as Anika and request React from Rafi. Rafi accepts in My Sessions. After the slot ends, confirm on both accounts. Rafi's available balance goes from one to two.
 3. Sign in as Rafi and request Figma from Nila. Nila accepts. Rafi now has one available credit and one reserved credit. After the session ends, confirm on both accounts and verify that Nila receives the credit and Rafi's reservation clears.
 
-Use separate browser profiles or sign out between accounts. The seeded slots start roughly 5, 50, and 95 minutes from seeding. You can publish different times from each member's profile. The automated integration test runs the exchange without waiting for real slots to end and spends Rafi's starter credit first, so the Figma request requires the React earnings.
+Use separate browser profiles or sign out between accounts. The seeded slots start roughly 5, 50, and 95 minutes from seeding. You can publish different times from each member's profile. To prove that the earned credit funds Figma, first have Rafi spend his starter credit on Anika’s Python session. Then have Rafi request Figma. Nila’s acceptance should report insufficient credit and leave the request pending. Complete the React session, then retry Nila’s acceptance. Rafi’s wallet should show `0 available / 1 reserved` until both accounts confirm Figma, then `0 available / 0 reserved`. The integration test covers this flow without waiting for real slots to end.
 
 ## Verification
 
-Run `npm run build`, `npm run check`, and `npm test`. The booking integration test uses `MONGODB_URI` from the environment or local env files and creates and drops a randomly named test database. Use a local development replica set or a dedicated test deployment with those permissions. Without a configured URI, the transaction test is skipped and the mutual-match test still runs.
+Run `npm run build`, `npm run check`, and `npm test`. The booking integration test uses `TEST_MONGODB_URI` from the environment or local env files and creates and drops a randomly named test database. Use a local development replica set or a dedicated test deployment with those permissions. Without `TEST_MONGODB_URI`, the transaction test is skipped and the mutual-match test still runs.

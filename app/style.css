@@ -29,7 +29,7 @@ h1, h2, h3, .brand { font-family: Georgia, serif; line-height: 1.05; }
 h1 { font-size: clamp(2.6rem, 6vw, 5.4rem); margin: .35rem 0 1.35rem; }
 h2 { font-size: clamp(1.65rem, 3vw, 2.35rem); margin: 0 0 1rem; }
 h3, p { margin: 0; }
-.shell { display: grid; grid-template-columns: 12rem 1fr; min-height: 100svh; }
+.shell { display: grid; grid-template-columns: 12rem minmax(0, 1fr); min-height: 100svh; }
 aside { border-right: 1px solid var(--line); padding: 2rem 1rem; }
 .brand { font-size: 1.9rem; font-weight: bold; display: inline-block; text-decoration: none; padding: 0 .45rem 1rem; border-bottom: 4px solid var(--lime); }
 nav { display: grid; gap: .5rem; margin-top: 2rem; }
@@ -84,12 +84,12 @@ select, textarea { font: inherit; color: inherit; border: 1px solid var(--line);
 .slots li, .session { border-top: 1px solid var(--line); padding: .8rem 0; }
 .session h3 { margin-bottom: .4rem; }
 .session-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
-.balances { display: flex; gap: .75rem; }
+.balances { display: flex; flex-wrap: wrap; gap: .75rem; }
 .balances div { border-radius: .7rem; padding: .65rem 1rem; background: var(--lime); }
 .balances div + div { background: var(--coral); }
 .balances dd { margin: 0; font-size: 1.5rem; font-weight: 700; }
 @media (max-width: 700px) {
-  nav { gap: .15rem; padding: .55rem .25rem calc(.55rem + env(safe-area-inset-bottom)); }
-  nav a { padding: .65rem clamp(.27rem, 1.8vw, .75rem); font-size: .85rem; }
+  nav { gap: .15rem; overflow-x: auto; padding: .55rem .25rem calc(.55rem + env(safe-area-inset-bottom)); }
+  nav a { flex-shrink: 0; padding: .65rem clamp(.27rem, 1.8vw, .75rem); font-size: .85rem; }
   .shell { padding-bottom: calc(4.7rem + env(safe-area-inset-bottom)); }
 }

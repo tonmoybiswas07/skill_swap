@@ -23,8 +23,8 @@ export function ActionForm({ action, children, localTime = false }: {
     const data = new FormData(event.currentTarget, submitter);
     startTransition(() => run(data));
   }}>
-    <fieldset disabled={pending}>{children}</fieldset>
-    {state.message && <p role={state.error ? "alert" : "status"}>{state.message}</p>}
+    <fieldset disabled={pending} aria-busy={pending}>{children}</fieldset>
+    {pending ? <p role="status">Saving…</p> : state.message && <p role={state.error ? "alert" : "status"}>{state.message}</p>}
   </form>;
 }
 

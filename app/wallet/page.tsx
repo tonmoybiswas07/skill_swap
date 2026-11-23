@@ -1,4 +1,4 @@
-import { collections, ensureWallet } from "@/lib/booking";
+import { collections } from "@/lib/booking";
 import { requireUser } from "@/lib/session";
 import { LocalTime } from "../interactive";
 
@@ -13,7 +13,6 @@ function delta(value: number) {
 
 export default async function WalletPage() {
   const user = await requireUser();
-  await ensureWallet(user.id);
   const { wallets, ledger } = collections();
   const [balance, activity] = await Promise.all([
     wallets.findOne({ _id: user.id }),
@@ -33,11 +32,11 @@ export default async function WalletPage() {
       </section>
       <section className="panel">
         <h2>Activity history</h2>
-        <ul className="slots">{activity.map((entry) => <li key={entry._id}>
+        {activity.length ? <ul className="slots">{activity.map((entry) => <li key={entry._id}>
           <strong>{labels[entry.kind]}</strong>
           <p>{delta(entry.available)} available · {delta(entry.reserved)} reserved</p>
           <LocalTime start={entry.at.toISOString()} />
-        </li>)}</ul>
+        </li>)}</ul> : <p>No credit activity yet.</p>}
       </section>
     </div>
   </main>;

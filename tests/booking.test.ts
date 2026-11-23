@@ -15,9 +15,10 @@ test("a mutual match requires a skill in each direction", () => {
 });
 
 test("transactions protect slots and credits across the three-account exchange", {
-  skip: !process.env.MONGODB_URI && "Set MONGODB_URI to a transaction-capable test server",
+  skip: !process.env.TEST_MONGODB_URI && "Set TEST_MONGODB_URI to a transaction-capable test server",
   timeout: 60_000,
 }, async () => {
+  process.env.MONGODB_URI = process.env.TEST_MONGODB_URI;
   process.env.MONGODB_DATABASE = `skillswap_test_${randomUUID().replaceAll("-", "")}`;
   process.env.BETTER_AUTH_URL = "http://localhost:3000";
   process.env.BETTER_AUTH_SECRET = randomUUID() + randomUUID();
@@ -47,6 +48,14 @@ test("transactions protect slots and credits across the three-account exchange",
       assert.deepEqual([wallet?.available, wallet?.reserved], [available, reserved]);
     }
 
+    async function activity(userId: string, kind: string, available: number, reserved: number, booking?: Awaited<ReturnType<typeof requestSlot>>) {
+      const entries = await ledger.find(booking ? { userId, booking } : { userId }).toArray();
+      assert.deepEqual(
+        entries.filter((entry) => entry.kind === kind).map((entry) => [entry.available, entry.reserved]),
+        [[available, reserved]],
+      );
+    }
+
     async function slot(mentor: string, minutes: number) {
       const start = new Date(Date.now() + minutes * 60_000);
       await publishSlot(mentor, start.toISOString());
@@ -57,7 +66,7 @@ test("transactions protect slots and credits across the three-account exchange",
     }
 
     await Promise.all([ensureWallet(rafi), ensureWallet(rafi)]);
-    assert.equal(await ledger.countDocuments({ userId: rafi, kind: "grant" }), 1);
+    await activity(rafi, "grant", 1, 0);
     await balance(rafi, 1, 0);
 
     const reactSlot = await slot(rafi, 60);
@@ -75,16 +84,17 @@ test("transactions protect slots and credits across the three-account exchange",
     assert.equal(competing.filter((result) => result.status === "fulfilled").length, 1);
     const winning = await bookings.findOne({ _id: { $in: [react, otherRequest] }, status: "accepted" });
     assert.ok(winning);
-    assert.equal(await ledger.countDocuments({ kind: "reservation", booking: winning._id }), 1);
+    await activity(winning.learner, "reservation", -1, 1, winning._id);
 
     const unpaid = await requestSlot(winning.learner, thirdSlot, "React");
     await assert.rejects(changeBooking(rafi, String(unpaid), "accept"), /insufficient/);
     assert.equal((await bookings.findOne({ _id: unpaid }))?.status, "pending");
+    assert.equal(await ledger.countDocuments({ booking: unpaid }), 0);
     await assert.rejects(changeBooking(winning.learner, String(winning._id), "confirm"), /unavailable/);
     await changeBooking(winning.learner, String(winning._id), "cancel");
     await assert.rejects(changeBooking(winning.learner, String(winning._id), "cancel"), /unavailable/);
     await balance(winning.learner, 1, 0);
-    assert.equal(await ledger.countDocuments({ kind: "release", booking: winning._id }), 1);
+    await activity(winning.learner, "release", 1, -1, winning._id);
     await changeBooking(rafi, String(unpaid), "reject");
     assert.equal((await bookings.findOne({ _id: unpaid }))?.status, "rejected");
 
@@ -100,7 +110,8 @@ test("transactions protect slots and credits across the three-account exchange",
       ]);
       await changeBooking(learner, String(id), "confirm");
       assert.equal((await bookings.findOne({ _id: id }))?.status, "completed");
-      assert.equal(await ledger.countDocuments({ kind: "transfer", booking: id }), 2);
+      await activity(mentor, "transfer", 1, 0, id);
+      await activity(learner, "transfer", 0, -1, id);
     }
 
     // Spend Rafi's starter credit on Python first, so Figma requires the React earnings.
@@ -118,6 +129,7 @@ test("transactions protect slots and credits across the three-account exchange",
 
     await changeBooking(nila, String(figma), "accept");
     await balance(rafi, 0, 1);
+    await activity(rafi, "reservation", -1, 1, figma);
     await complete(nila, rafi, figma, () => balance(nila, 1, 0));
     await balance(rafi, 0, 0);
     await balance(nila, 2, 0);
