@@ -32,7 +32,7 @@ export default async function WalletPage() {
       </section>
       <section className="panel">
         <h2>Activity history</h2>
-        {activity.length ? <ul className="slots">{activity.map((entry) => <li key={entry._id}>
+        {activity.length ? <ul className="slots">{activity.map((entry) => <li className="ledger-row" key={entry._id}>
           <strong>{labels[entry.kind]}</strong>
           <p>{delta(entry.available)} available · {delta(entry.reserved)} reserved</p>
           <LocalTime start={entry.at.toISOString()} />

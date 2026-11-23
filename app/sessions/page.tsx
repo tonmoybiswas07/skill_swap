@@ -50,7 +50,7 @@ export default async function SessionsPage() {
           const status = booking.status === "pending" && !future ? "expired" : booking.status;
           return <article className="session" key={String(booking._id)}>
             <h3>{booking.skill} · {peer}</h3>
-            <p>{mentor ? "Teaching" : "Learning"} · {statusLabels[status]}</p>
+            <p>{mentor ? "Teaching" : "Learning"} · <span className="session-status" data-status={status}>{statusLabels[status]}</span></p>
             <LocalTime start={booking.start.toISOString()} end={booking.end.toISOString()} />
             {accepted && booking.end <= now && confirmed && <p>Confirmed. Waiting for the other participant.</p>}
             {(pending || (accepted && (future || (booking.end <= now && !confirmed)))) && <ActionForm action={submit.bind(null, "change")}>
