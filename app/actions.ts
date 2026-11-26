@@ -34,7 +34,8 @@ export async function submit(operation: Operation, _: Result, data: FormData): P
         await requestSlot(user.id, String(data.get("slot")), String(data.get("skill")));
         break;
       case "change":
-        await changeBooking(user.id, String(data.get("booking")), String(data.get("action")), String(data.get("reason") ?? ""));
+        await changeBooking(user.id, String(data.get("booking")), String(data.get("action")), String(data.get("reason") ?? ""),
+          String(data.get("meetingLink") ?? ""), String(data.get("campusLocation") ?? ""));
         break;
       case "feedback":
         await leaveFeedback(user.id, String(data.get("booking")), Number(data.get("rating")), String(data.get("comment") ?? ""));

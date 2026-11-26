@@ -14,3 +14,12 @@ test("calendar exports UTC dates and safely folds and escapes skill names", () =
   assert.equal(unfolded.split("\r\n").filter((line) => line === "END:VEVENT").length, 1);
   assert.ok(calendar.split("\r\n").every((line) => Buffer.byteLength(line) <= 75));
 });
+
+test("calendar includes the accepted meeting details", () => {
+  const start = new Date("2026-12-01T12:00:00Z");
+  const event = { id: "demo", skill: "React", start, end: new Date(+start + 30 * 60_000) };
+  assert.ok(sessionCalendar({ ...event, meeting: { kind: "campus", value: "Library, room 2" } }, start)
+    .includes("LOCATION:Library\\, room 2\r\n"));
+  assert.ok(sessionCalendar({ ...event, meeting: { kind: "online", value: "https://example.test/meeting" } }, start)
+    .includes("URL:https://example.test/meeting\r\n"));
+});

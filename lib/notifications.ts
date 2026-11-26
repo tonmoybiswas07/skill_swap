@@ -3,7 +3,7 @@ import { getDatabase } from "./db.ts";
 
 export type NotificationKind =
   | "request" | "accepted" | "rejected" | "cancelled" | "disputed"
-  | "completed" | "refunded";
+  | "completed" | "refunded" | "confirm-session" | "confirmation-expired";
 
 type Notification = {
   _id: string;

@@ -8,6 +8,7 @@ import { ActionForm, LocalTime } from "../interactive";
 const labels: Record<NotificationKind, string> = {
   request: "New booking request", accepted: "Request accepted", rejected: "Request declined",
   cancelled: "Session cancelled", disputed: "Session issue reported",
+  "confirm-session": "Confirm session completion", "confirmation-expired": "Confirmation deadline passed · credit returned",
   completed: "Session completed", refunded: "Credit returned to learner",
 };
 

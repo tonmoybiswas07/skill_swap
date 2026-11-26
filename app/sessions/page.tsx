@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/db";
-import { canReviewDispute, collections, isDisputeModerator, type Booking } from "@/lib/booking";
+import { canReviewDispute, collections, confirmationDeadline, isDisputeModerator, type Booking } from "@/lib/booking";
 import { feedback } from "@/lib/feedback";
 import { profiles } from "@/lib/profiles";
 import { requireUser } from "@/lib/session";
@@ -32,10 +32,12 @@ export default async function SessionsPage() {
   const requests = sessions.filter((booking) => booking.status === "pending" && booking.start > now);
   const upcoming = sessions.filter((booking) => booking.status === "accepted" && booking.end > now);
   const history = sessions.filter((booking) => !requests.includes(booking) && !upcoming.includes(booking)).reverse();
+  const awaiting = history.filter((booking) => booking.status === "accepted");
   const groups: [string, Booking[], string][] = [
     ["Requests", requests, "No pending requests."],
     ["Upcoming sessions", upcoming, "No upcoming sessions."],
-    ["History", history, "No past sessions."],
+    ["Awaiting confirmation", awaiting, "No sessions awaiting confirmation."],
+    ["History", history.filter((booking) => booking.status !== "accepted"), "No past sessions."],
   ];
 
   return <main className="discover">
@@ -52,25 +54,38 @@ export default async function SessionsPage() {
           const accepted = booking.status === "accepted";
           const pending = booking.status === "pending" && future;
           const confirmed = mentor ? booking.mentorConfirmed : booking.learnerConfirmed;
+          const deadline = confirmationDeadline(booking.end);
+          const canConfirm = accepted && booking.end <= now && deadline > now;
           const status = booking.status === "pending" && !future ? "expired" : booking.status;
           return <article className="session" id={`session-${booking._id}`} key={String(booking._id)}>
             <h3>{booking.skill} · {peer}</h3>
             <p>{mentor ? "Teaching" : "Learning"} · <span className="session-status" data-status={status}>{statusLabels[status]}</span></p>
             <LocalTime start={booking.start.toISOString()} end={booking.end.toISOString()} />
+            {accepted && booking.meeting?.kind === "campus" && <p>Campus location · {booking.meeting.value}</p>}
+            {accepted && booking.meeting?.kind === "online" && booking.end > now && (
+              <a className="button" href={booking.meeting.value} target="_blank" rel="noopener noreferrer">Join online session</a>
+            )}
             {accepted && future && <a className="button calendar-link" href={`/api/sessions/${booking._id}/calendar`}>Add to calendar</a>}
-            {accepted && booking.end <= now && confirmed && <p>Confirmed. Waiting for the other participant.</p>}
-            {(pending || (accepted && (future || (booking.end <= now && !confirmed)))) && <ActionForm action={submit.bind(null, "change")}>
+            {canConfirm && <p>Confirm or report an issue by <LocalTime start={deadline.toISOString()} />. The credit returns to the learner if the deadline passes without both confirmations or a report.</p>}
+            {accepted && deadline <= now && <p>Confirmation closed. Credit refund is pending.</p>}
+            {canConfirm && confirmed && <p>Confirmed. Waiting for the other participant.</p>}
+            {(pending || (accepted && (future || (canConfirm && !confirmed)))) && <ActionForm action={submit.bind(null, "change")}>
               <input type="hidden" name="booking" value={String(booking._id)} />
+              {mentor && pending && <fieldset>
+                <legend>Meeting details (optional)</legend>
+                <label>Online meeting link<input name="meetingLink" type="url" maxLength={500} /></label>
+                <label>Or campus location<input name="campusLocation" maxLength={160} /></label>
+              </fieldset>}
               <div className="session-actions">
                 {mentor && pending && <>
                   <button className="primary" name="action" value="accept">Accept</button>
-                  <button name="action" value="reject">Reject</button>
+                  <button formNoValidate name="action" value="reject">Reject</button>
                 </>}
-                {future && <button name="action" value="cancel">Cancel</button>}
-                {accepted && booking.end <= now && <button className="primary" name="action" value="confirm">Confirm completion</button>}
+                {future && <button formNoValidate name="action" value="cancel">Cancel</button>}
+                {canConfirm && <button className="primary" name="action" value="confirm">Confirm completion</button>}
               </div>
             </ActionForm>}
-            {accepted && booking.end <= now && (canReviewDispute(booking) ? <details>
+            {canConfirm && (canReviewDispute(booking) ? <details>
               <summary>Report a no-show or issue</summary>
               <p>The credit stays reserved until a moderator decides the outcome.</p>
               <ActionForm action={submit.bind(null, "change")}>

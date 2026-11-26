@@ -342,21 +342,6 @@ nav a[aria-current] {
 .filter-bar {
   margin: 0.95rem 0 1rem;
 }
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-.filters button {
-  padding: 0.38rem 0.74rem;
-  border-radius: 2rem;
-  font-size: 0.82rem;
-}
-.filters [aria-pressed="true"] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
-}
 .mentor-options {
   display: flex;
   flex-wrap: wrap;

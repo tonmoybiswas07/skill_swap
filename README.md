@@ -24,7 +24,7 @@ SkillSwap Ledger is a campus skill exchange built with Next.js App Router, TypeS
 
 | Route | What you can do |
 | --- | --- |
-| `/` | Search by name, campus, or skill, filter by category, campus, or availability, and see a mutual match when both skill interests align. |
+| `/` | Search by name, campus, or skill, filter by category, campus, or availability, and share filtered results by URL. Results prioritize mutual matches and the earliest open slots. |
 | `/account` | Sign up, sign in, or sign out with Better Auth. |
 | `/profile` | Edit and verify your campus profile. Publish up to eight weekly 30-minute slots at once or remove unbooked slots. |
 | `/mentors/[id]` | View a mentor's skills and request an open session. |
@@ -66,3 +66,11 @@ Use separate browser profiles or sign out between accounts. The seeded slots sta
 ## Verification
 
 Run `npm run build`, `npm run check`, and `npm test`. The booking integration test uses `TEST_MONGODB_URI` from the environment or local env files and creates and drops a randomly named test database. Use a local development replica set or a dedicated test deployment with those permissions. Without `TEST_MONGODB_URI`, the transaction test is skipped and the mutual-match test still runs.
+
+## Session maintenance
+
+Run `npm run maintain:sessions` on the same database as the app every five minutes using your host's scheduled jobs. The job expires past pending requests, adds an Inbox reminder after an accepted session ends, and refunds the learner if 72 hours pass after the end without both confirmations. A report submitted within that window keeps the credit reserved for moderator review. The deadline also applies to existing accepted bookings. The first run processes any overdue reservations.
+
+Set `SESSION_REMINDER_FROM` to a verified Resend sender and provide `RESEND_API_KEY` and `BETTER_AUTH_URL` to enable email reminders. The job sends a 24-hour reminder between 24 and 1 hours before the session, and a 1-hour reminder during the last hour. It checks the booking status before delivery and uses Resend idempotency keys and database delivery markers for retries.
+
+Mentors can add an HTTPS meeting link or a campus location when accepting a booking. The meeting details appear in My Sessions for the participants and in their calendar download.

@@ -19,7 +19,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!booking) return new Response("Upcoming session not found.", { status: 404, headers });
 
   return new Response(sessionCalendar({
-    id: booking._id.toHexString(), skill: booking.skill, start: booking.start, end: booking.end,
+    id: booking._id.toHexString(), skill: booking.skill, start: booking.start, end: booking.end, meeting: booking.meeting,
   }, now), {
     headers: {
       ...headers,

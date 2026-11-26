@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { getAuth } from "../lib/auth.ts";
-import { changeBooking, collections, ensureWallet, publishSlot, publishSlots, removeSlot, requestSlot } from "../lib/booking.ts";
+import { changeBooking, collections, ensureWallet, maintainBookings, publishSlot, publishSlots, removeSlot, requestSlot } from "../lib/booking.ts";
 import { sendCampusCode, verifiedInstitutions, verifyCampusCode } from "../lib/campus.ts";
 import { feedback, leaveFeedback } from "../lib/feedback.ts";
 import { markNotificationsRead, notifications } from "../lib/notifications.ts";
+import { sendSessionReminders } from "../lib/reminders.ts";
 import { getDatabase } from "../lib/db.ts";
 import { mutualMatch, profiles, saveProfile, type Profile } from "../lib/profiles.ts";
 
@@ -207,6 +208,59 @@ test("transactions protect slots and credits across the three-account exchange",
     await leaveFeedback(anika, String(teaching), 5, "Helpful examples.");
     await assert.rejects(leaveFeedback(anika, String(teaching), 4, ""), /already reviewed/);
     assert.equal((await feedback().findOne({ _id: teaching }))?.comment, "Helpful examples.");
+
+    const expired = await requestSlot(anika, await slot(rafi, 420), "React");
+    const noShow = await requestSlot(nila, await slot(rafi, 460), "React");
+    await assert.rejects(changeBooking(rafi, String(noShow), "accept", "", "http://example.test"), /HTTPS/);
+    await changeBooking(rafi, String(noShow), "accept", "", "https://example.test/meeting");
+    assert.deepEqual((await bookings.findOne({ _id: noShow }))?.meeting, {
+      kind: "online", value: "https://example.test/meeting",
+    });
+    await bookings.updateOne({ _id: expired }, { $set: { start: new Date(Date.now() - 60_000) } });
+    await bookings.updateOne({ _id: noShow }, { $set: { end: new Date(Date.now() - 60_000) } });
+    await changeBooking(rafi, String(noShow), "confirm");
+    await maintainBookings();
+    assert.equal((await bookings.findOne({ _id: expired }))?.status, "expired");
+    assert.equal(await notifications().countDocuments({ booking: noShow, kind: "confirm-session", recipient: nila }), 1);
+    assert.equal(await notifications().countDocuments({ booking: noShow, kind: "confirm-session", recipient: rafi }), 0);
+    await bookings.updateOne({ _id: noShow }, { $set: { end: new Date(Date.now() - 73 * 60 * 60_000) } });
+    await assert.rejects(changeBooking(nila, String(noShow), "confirm"), /deadline/);
+    await Promise.all([maintainBookings(), maintainBookings()]);
+    assert.equal((await bookings.findOne({ _id: noShow }))?.status, "refunded");
+    await activity(nila, "release", 1, -1, noShow);
+    await balance(nila, 2, 0);
+
+    const upcoming = await requestSlot(nila, await slot(rafi, 20), "React");
+    await changeBooking(rafi, String(upcoming), "accept", "", "", "Library, room 2");
+    process.env.RESEND_API_KEY = "mock-key";
+    process.env.SESSION_REMINDER_FROM = "sender@example.test";
+    const cancelledReminder = await requestSlot(rafi, await slot(nila, 55), "Figma");
+    await changeBooking(nila, String(cancelledReminder), "accept");
+    await changeBooking(rafi, String(cancelledReminder), "cancel");
+    const deliveries = new Set<string>();
+    let rejectFirstDelivery = true;
+    const reminderFetch = context.mock.method(globalThis, "fetch", async (_: string, options: RequestInit) => {
+      const key = new Headers(options.headers).get("Idempotency-Key");
+      assert.ok(key);
+      assert.match(key, new RegExp(`^skillswap/${upcoming}/(24|1)h/(learner|mentor)$`));
+      if (rejectFirstDelivery) {
+        rejectFirstDelivery = false;
+        return new Response(null, { status: 503 });
+      }
+      deliveries.add(key);
+      return new Response(null, { status: 200 });
+    });
+    const dayReminderTime = new Date(Date.now() - 2 * 60 * 60_000);
+    await assert.rejects(sendSessionReminders(dayReminderTime), /1 session reminders/);
+    await sendSessionReminders(dayReminderTime);
+    await sendSessionReminders();
+    await sendSessionReminders();
+    assert.equal(deliveries.size, 4);
+    assert.equal(reminderFetch.mock.callCount(), 5);
+    await changeBooking(nila, String(upcoming), "cancel");
+    await sendSessionReminders();
+    assert.equal(reminderFetch.mock.callCount(), 5);
+    reminderFetch.mock.restore();
 
     process.env.CAMPUS_EMAIL_DOMAINS = "example.test=Example University";
     process.env.RESEND_API_KEY = "mock-key";

@@ -8,6 +8,8 @@ export type Slot = { _id: ObjectId; mentor: string; start: Date; end: Date; revi
 export type Booking = {
   _id: ObjectId; slot: ObjectId; mentor: string; learner: string; skill: string;
   start: Date; end: Date; status: Status; active: boolean;
+  meeting?: { kind: "online" | "campus"; value: string };
+  confirmationReminded?: boolean;
   mentorConfirmed?: boolean; learnerConfirmed?: boolean;
   dispute?: { by: string; reason: string; openedAt: Date; resolvedAt?: Date; resolvedBy?: string };
 };
@@ -36,6 +38,8 @@ function ensureIndexes() {
   indexes ??= Promise.all([
     slots.createIndex({ mentor: 1, start: 1 }, { unique: true }),
     bookings.createIndex({ slot: 1, learner: 1 }, { unique: true, partialFilterExpression: { active: true } }),
+    bookings.createIndex({ status: 1, start: 1 }),
+    bookings.createIndex({ status: 1, end: 1 }),
     bookings.createIndex({ learner: 1, status: 1, start: 1 }),
     bookings.createIndex({ mentor: 1, status: 1, start: 1 }),
     ledger.createIndex({ userId: 1, at: -1 }),
@@ -180,7 +184,63 @@ async function transferCredit(session: ClientSession, booking: Booking) {
   await postEntry(session, booking, booking.mentor, "transfer", 1, 0);
 }
 
-export async function changeBooking(userId: string, bookingId: string, action: string, reason = "") {
+export const CONFIRMATION_WINDOW = 72 * 60 * 60_000;
+
+export function confirmationDeadline(end: Date) {
+  return new Date(+end + CONFIRMATION_WINDOW);
+}
+
+export async function maintainBookings(now = new Date()) {
+  await ensureIndexes();
+  const { bookings } = collections();
+  await bookings.updateMany({ status: "pending", start: { $lte: now } }, {
+    $set: { status: "expired", active: false },
+  });
+  const cutoff = new Date(+now - CONFIRMATION_WINDOW);
+  const overdue = { status: "accepted", end: { $lte: cutoff } } as const;
+  for await (const candidate of bookings.find(overdue, { projection: { _id: 1 } })) {
+    await transaction(async (session) => {
+      const booking = await bookings.findOne({ _id: candidate._id, ...overdue }, { session });
+      if (!booking) return;
+      await postEntry(session, booking, booking.learner, "release", 1, -1);
+      await bookings.updateOne({ _id: booking._id }, { $set: { status: "refunded", active: false } }, { session });
+      for (const participant of [booking.learner, booking.mentor]) {
+        await notify(session, booking, participant, "confirmation-expired");
+      }
+    });
+  }
+  for await (const candidate of bookings.find({
+    status: "accepted", end: { $gt: cutoff, $lte: now }, confirmationReminded: { $ne: true },
+  }, { projection: { _id: 1 } })) {
+    await transaction(async (session) => {
+      const booking = await bookings.findOne({
+        _id: candidate._id, status: "accepted", end: { $gt: cutoff, $lte: now }, confirmationReminded: { $ne: true },
+      }, { session });
+      if (!booking) return;
+      await bookings.updateOne({ _id: booking._id }, { $set: { confirmationReminded: true } }, { session });
+      if (!booking.learnerConfirmed) await notify(session, booking, booking.learner, "confirm-session");
+      if (!booking.mentorConfirmed) await notify(session, booking, booking.mentor, "confirm-session");
+    });
+  }
+}
+
+function meetingDetails(link: string, location: string): Booking["meeting"] {
+  const online = link.trim();
+  const campus = location.trim();
+  if (online && campus) throw new BookingError("Enter either a meeting link or a campus location.");
+  if (campus) {
+    if (campus.length > 160 || /[\r\n]/.test(campus)) throw new BookingError("Enter a campus location of up to 160 characters.");
+    return { kind: "campus", value: campus };
+  }
+  if (!online) return;
+  const url = URL.canParse(online) ? new URL(online) : null;
+  if (!url || url.protocol !== "https:" || url.username || url.password || url.href.length > 500) {
+    throw new BookingError("Enter a valid HTTPS meeting link of up to 500 characters.");
+  }
+  return { kind: "online", value: url.href };
+}
+
+export async function changeBooking(userId: string, bookingId: string, action: string, reason = "", link = "", location = "") {
   const { bookings, slots, wallets } = collections();
   const id = objectId(bookingId);
   // An account created before the wallet feature can also accept a request.
@@ -209,6 +269,10 @@ export async function changeBooking(userId: string, bookingId: string, action: s
     const peer = isMentor ? booking.learner : booking.mentor;
     const now = new Date();
     const future = booking.start > now;
+    if (booking.status === "accepted" && (action === "confirm" || action === "report")
+      && confirmationDeadline(booking.end) <= now) {
+      throw new BookingError("The confirmation deadline has passed.");
+    }
     const setStatus = (status: Status) => bookings.updateOne({ _id: id }, {
       $set: { status, active: status === "accepted" || status === "pending" },
     }, { session });
@@ -217,6 +281,7 @@ export async function changeBooking(userId: string, bookingId: string, action: s
       if (!(await profiles().findOne({ _id: booking.mentor, teaches: booking.skill }, { session }))) {
         throw new BookingError("Add this skill back to your profile before accepting.");
       }
+      const meeting = meetingDetails(link, location);
       const participants = [booking.learner, booking.mentor].sort();
       for (const participant of participants) {
         await wallets.updateOne({ _id: participant }, { $inc: { revision: 1 } }, { session });
@@ -229,7 +294,7 @@ export async function changeBooking(userId: string, bookingId: string, action: s
       const claim = await slots.updateOne({ _id: booking.slot, booking: { $exists: false } }, { $set: { booking: id } }, { session });
       if (!claim.matchedCount) throw new BookingError("This slot has already been booked.");
       await postEntry(session, booking, booking.learner, "reservation", -1, 1);
-      await setStatus("accepted");
+      await bookings.updateOne({ _id: id }, { $set: { status: "accepted", active: true, ...(meeting && { meeting }) } }, { session });
       await notify(session, booking, booking.learner, "accepted");
       const others = await bookings.find({
         slot: booking.slot, _id: { $ne: id }, status: "pending",

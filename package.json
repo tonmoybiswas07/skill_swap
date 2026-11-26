@@ -8,7 +8,8 @@
     "start": "next start",
     "check": "next typegen && tsc --noEmit",
     "test": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --test tests/*.test.ts",
-    "seed:demo": "node --env-file-if-exists=.env.local scripts/seed-demo.ts"
+    "seed:demo": "node --env-file-if-exists=.env.local scripts/seed-demo.ts",
+    "maintain:sessions": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/maintain-sessions.ts"
   },
   "dependencies": {
     "next": "^16.0.0",

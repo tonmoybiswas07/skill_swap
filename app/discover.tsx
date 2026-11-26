@@ -1,29 +1,13 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
+import { LocalTime } from "./interactive";
 import type { Profile } from "@/lib/profiles";
 
 type Mentor = Profile & {
   verifiedCampus?: string;
-  available: boolean;
+  nextSlot?: string;
   match: { offered: string; wanted: string } | null;
 };
 const categories = ["All", "Development", "Design", "Other"];
-
-function categoryFor(skill: string) {
-  if (
-    /figma|design|sketch|illustrat|photoshop|typography|ux\b|ui\b/i.test(skill)
-  )
-    return "Design";
-  if (
-    /react|python|javascript|typescript|programming|coding|web dev|node|html|css|java\b|ruby|golang|rust|sql/i.test(
-      skill,
-    )
-  )
-    return "Development";
-  return "Other";
-}
 
 function Portrait({ name }: { name: string }) {
   return (
@@ -37,40 +21,30 @@ function Portrait({ name }: { name: string }) {
   );
 }
 
+type Filters = { query: string; campus: string; category: string; open: boolean; page: number };
+
+function pageURL(filters: Filters, page: number) {
+  const params = new URLSearchParams();
+  if (filters.query) params.set("q", filters.query);
+  if (filters.category) params.set("category", filters.category);
+  if (filters.campus) params.set("campus", filters.campus);
+  if (filters.open) params.set("open", "1");
+  if (page > 1) params.set("page", String(page));
+  return params.size ? `/?${params}` : "/";
+}
+
 export default function Discover({
-  mentors,
-  needsProfile,
+  mentors, needsProfile, filters, campuses, hasNext,
 }: {
   mentors: Mentor[];
   needsProfile: boolean;
+  filters: Filters;
+  campuses: string[];
+  hasNext: boolean;
 }) {
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
-  const [openOnly, setOpenOnly] = useState(false);
-  const [campus, setCampus] = useState("");
-  const campuses = new Map(
-    mentors.map((mentor) => [mentor.campus.toLowerCase(), mentor.campus]),
-  );
-  const query = search.normalize("NFKC").trim().toLowerCase();
-  const visible = mentors.filter(
-    (mentor) =>
-      (!openOnly || mentor.available) &&
-      (!campus || mentor.campus.toLowerCase() === campus) &&
-      (category === "All" ||
-        mentor.teaches.some((skill) => categoryFor(skill) === category)) &&
-      [mentor.name, mentor.campus, ...mentor.teaches, ...mentor.learns].some(
-        (value) => value.toLowerCase().includes(query),
-      ),
-  );
-  const matched = visible.find((mentor) => mentor.match);
-  const filtered = !!query || category !== "All" || openOnly || !!campus;
-
-  function resetFilters() {
-    setSearch("");
-    setCategory("All");
-    setOpenOnly(false);
-    setCampus("");
-  }
+  const { query, category, campus, open, page } = filters;
+  const matched = mentors.find((mentor) => mentor.match);
+  const filtered = !!(query || category || campus || open);
 
   return (
     <main className="discover">
@@ -87,8 +61,10 @@ export default function Discover({
               type="search"
               aria-label="Search mentors, skills, and campuses"
               placeholder="Search skills or names…"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              name="q"
+              form="mentor-filters"
+              maxLength={100}
+              defaultValue={query}
             />
           </div>
         </div>
@@ -135,52 +111,27 @@ export default function Discover({
       <section className="mentor-section" aria-labelledby="mentor-heading">
         <div className="section-heading">
           <h2 id="mentor-heading">Discover mentors</h2>
-          <p role="status">
-            {visible.length} {visible.length === 1 ? "mentor" : "mentors"}
-          </p>
+          <p>Page {page}</p>
         </div>
-        <div className="filter-bar">
-          <div className="filters" aria-label="Skill categories">
-            {categories.map((item) => (
-              <button
-                type="button"
-                key={item}
-                aria-pressed={category === item}
-                onClick={() => setCategory(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
+        <form action="/" id="mentor-filters" className="filter-bar">
           <div className="mentor-options">
-            {campuses.size > 0 && (
-              <select
-                aria-label="Campus"
-                value={campus}
-                onChange={(event) => setCampus(event.target.value)}
-              >
-                <option value="">All campuses</option>
-                {[...campuses]
-                  .sort(([, a], [, b]) => a.localeCompare(b))
-                  .map(([key, name]) => (
-                    <option key={key} value={key}>
-                      {name}
-                    </option>
-                  ))}
-              </select>
-            )}
+            <select name="category" aria-label="Skill category" defaultValue={category}>
+              {categories.map((item) => <option key={item} value={item === "All" ? "" : item}>{item}</option>)}
+            </select>
+            <select name="campus" aria-label="Campus" defaultValue={campus}>
+              <option value="">All campuses</option>
+              {campus && !campuses.includes(campus) && <option>{campus}</option>}
+              {campuses.map((name) => <option key={name}>{name}</option>)}
+            </select>
             <label className="availability-filter">
-              <input
-                type="checkbox"
-                checked={openOnly}
-                onChange={(event) => setOpenOnly(event.target.checked)}
-              />{" "}
-              Open slots only
+              <input type="checkbox" name="open" value="1" defaultChecked={open} /> Open slots only
             </label>
+            <button type="submit">Search</button>
+            {filtered && <Link href="/">Clear filters</Link>}
           </div>
-        </div>
+        </form>
         <div className="mentors">
-          {visible.map((mentor) => (
+          {mentors.map((mentor) => (
             <article key={mentor._id}>
               <div className="mentor-identity">
                 <Portrait name={mentor.name} />
@@ -218,10 +169,10 @@ export default function Discover({
               <div className="mentor-footer">
                 <span
                   className={
-                    mentor.available ? "availability is-open" : "availability"
+                    mentor.nextSlot ? "availability is-open" : "availability"
                   }
                 >
-                  {mentor.available ? "Open slots" : "No open slots"}
+                  {mentor.nextSlot ? <>Next slot · <LocalTime start={mentor.nextSlot} /></> : "No open slots"}
                 </span>
                 <Link className="profile-link" href={`/mentors/${mentor._id}`}>
                   View profile <span aria-hidden="true">↗</span>
@@ -230,20 +181,17 @@ export default function Discover({
             </article>
           ))}
         </div>
-        {!visible.length && (
+        {!mentors.length && (
           <div className="panel empty-state">
             <h3>
-              {mentors.length
-                ? "No mentors match these filters"
-                : "No mentors have published teaching skills yet."}
+              {page > 1 ? "No mentors on this page" : filtered ? "No mentors match these filters" : "No mentors have published teaching skills yet."}
             </h3>
-            {filtered && (
-              <button type="button" onClick={resetFilters}>
-                Clear filters
-              </button>
-            )}
           </div>
         )}
+        {(page > 1 || hasNext) && <nav className="session-actions" aria-label="Mentor result pages">
+          {page > 1 && <Link className="button" href={pageURL(filters, page - 1)}>Previous page</Link>}
+          {hasNext && <Link className="button" href={pageURL(filters, page + 1)}>Next page</Link>}
+        </nav>}
       </section>
     </main>
   );

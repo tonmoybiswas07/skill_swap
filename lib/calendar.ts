@@ -24,7 +24,7 @@ function fold(line: string) {
   return segments.join("\r\n");
 }
 
-export function sessionCalendar(event: { id: string; skill: string; start: Date; end: Date }, stamp: Date) {
+export function sessionCalendar(event: { id: string; skill: string; start: Date; end: Date; meeting?: { kind: "online" | "campus"; value: string } }, stamp: Date) {
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -35,6 +35,8 @@ export function sessionCalendar(event: { id: string; skill: string; start: Date;
     `DTSTART:${calendarDate(event.start)}`,
     `DTEND:${calendarDate(event.end)}`,
     `SUMMARY:${calendarText(`SkillSwap · ${event.skill}`)}`,
+    ...(event.meeting?.kind === "campus" ? [`LOCATION:${calendarText(event.meeting.value)}`] : []),
+    ...(event.meeting?.kind === "online" ? [`URL:${event.meeting.value}`] : []),
     "STATUS:CONFIRMED",
     "END:VEVENT",
     "END:VCALENDAR",
