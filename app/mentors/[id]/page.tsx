@@ -2,11 +2,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { verifiedInstitutions } from "@/lib/campus";
 import { feedback } from "@/lib/feedback";
-import { collections } from "@/lib/booking";
+import { collections, ensureWallet } from "@/lib/booking";
 import { profiles } from "@/lib/profiles";
 import { currentUser } from "@/lib/session";
 import { submit } from "../../actions";
 import { ActionForm, LocalTime } from "../../interactive";
+
+async function availableCredits(userId: string) {
+  const { wallets } = collections();
+  const balance = await wallets.findOne({ _id: userId }, { projection: { available: 1 } });
+  if (balance) return balance.available;
+
+  await ensureWallet(userId);
+  return (await wallets.findOne({ _id: userId }, { projection: { available: 1 } }))?.available;
+}
 
 export default async function MentorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,11 +23,12 @@ export default async function MentorPage({ params }: { params: Promise<{ id: str
   const mentor = await profiles().findOne({ _id: id });
   if (!mentor) notFound();
   const { slots, bookings } = collections();
-  const [open, pending, verified, reviews] = await Promise.all([
+  const [open, pending, verified, reviews, credits] = await Promise.all([
     slots.find({ mentor: id, start: { $gt: new Date() }, booking: { $exists: false } }).sort({ start: 1 }).toArray(),
     user ? bookings.distinct("slot", { mentor: id, learner: user.id, status: "pending", start: { $gt: new Date() } }) : [],
     verifiedInstitutions([id]),
     feedback().find({ mentor: id }).sort({ createdAt: -1 }).limit(10).toArray(),
+    user && user.id !== id ? availableCredits(user.id) : undefined,
   ]);
   const requested = new Set(pending.map(String));
 
@@ -36,6 +46,12 @@ export default async function MentorPage({ params }: { params: Promise<{ id: str
       <section className="panel">
         <h2>Available sessions</h2>
         <p>30 minutes · 1 credit per session</p>
+        {credits !== undefined && <>
+          <p><strong>{credits} {credits === 1 ? "credit" : "credits"} available</strong> · <Link href="/wallet">View wallet</Link></p>
+          {credits < 1 && open.length > 0 && mentor.teaches.length > 0 && (
+            <p>You can send a request now. The mentor can accept it once you have 1 available credit.</p>
+          )}
+        </>}
         {user?.id === id && <p><Link href="/profile">Manage your profile and availability</Link></p>}
         {!open.length || !mentor.teaches.length ? <p>No open sessions.</p> : <ul className="slots">
           {open.map((slot) => <li key={String(slot._id)}>
